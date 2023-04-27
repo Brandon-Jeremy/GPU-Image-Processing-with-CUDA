@@ -2,6 +2,7 @@
 #include <stdlib.h>
 #include <png.h>
 #include <sys/time.h>
+#include <string.h>
 
 typedef struct
 {
@@ -11,6 +12,9 @@ typedef struct
     png_infop info_ptr;
     png_byte *buf;
 } PNG_RAW;
+
+//Enumeration method to help keep it user friendly
+enum colors{Red,Green,Blue};
 
 long long timeInMilliseconds(void)
 {
@@ -78,7 +82,7 @@ void write_png(char *file_name, PNG_RAW *png_raw)
     fclose(fp);
 }
 
-__global__ void PictureKernel(png_byte *d_P, int height, int width)
+__global__ void PictureKernel(png_byte *d_P, int height, int width, int color)
 {
     // Calculate the row # of the d_P element
     int Row = blockIdx.y * blockDim.y + threadIdx.y;
@@ -87,26 +91,13 @@ __global__ void PictureKernel(png_byte *d_P, int height, int width)
     // each thread computes one element of d_P if in range
     if ((Row < height) && (Col < width))
     {
-        d_P[(Row * width + Col) * 3 + 2] = (png_byte)255; //*3+2 for blue, coloring follows RGB sequence
+        d_P[(Row * width + Col) * 3 + color] = (png_byte)255; //*3+2 for blue, coloring follows RGB sequence
     }
 }
 
-void process_on_host(PNG_RAW *png_raw)
-{
-    long long start = timeInMilliseconds();
-    for (int i = 0; i < png_raw->width * png_raw->height; i++)
-        png_raw->buf[i * 3] = (png_byte)255;
-    long long end = timeInMilliseconds();
-    printf("timing on host is %lld millis\n", end - start);
-}
-
-void process_on_device(PNG_RAW *png_raw)
+void process_on_device(PNG_RAW *png_raw, int color)
 {
 
-    // assume that the picture is m × n,
-    // m pixels in y dimension and n pixels in x dimension
-    // input d_Pin has been allocated on and copied to device
-    // output d_Pout has been allocated on device
     int m = png_raw->height;
     int n = png_raw->width;
     int pixel_size = png_raw->pixel_size;
@@ -127,7 +118,7 @@ void process_on_device(PNG_RAW *png_raw)
     }
     cudaMemcpy(d_P, png_raw->buf, m * n * pixel_size, cudaMemcpyHostToDevice);
 
-    PictureKernel<<<DimGrid, DimBlock>>>(d_P, m, n);
+    PictureKernel<<<DimGrid, DimBlock>>>(d_P, m, n, color);
 
     cudaMemcpy(png_raw->buf, d_P, m * n * pixel_size, cudaMemcpyDeviceToHost);
 
@@ -138,26 +129,39 @@ void process_on_device(PNG_RAW *png_raw)
 
 int main(int argc, char **argv)
 {
-    int on_host = 0;
 
-    if (argv[3] != NULL && strcmp(argv[3], "-d") == 0)
-        on_host = 0;
+    //enum for selecting color
+    enum colors RGB;
+    char *test = "Red";
+    RGB = Red; //default color set to Red past enumeration
+    if(argv[3] != NULL){
+      test = argv[3];
+      if(strcmp(test, "Red")==0){
+        RGB = Red;
+      }
+      else if(strcmp(test, "Green")==0){
+        RGB=Green;
+      }
+      else if(strcmp(test, "Blue")==0){
+        RGB=Blue;
+      }
+      else{
+        printf("Incorrect color. Possible colors: \n [Red, Green, Blue] \nCOLOR:%s\nNumber:%d",test,RGB);
+      }
+    }
 
     PNG_RAW *png_raw = read_png(argv[1]);
     if (png_raw->pixel_size != 3)
     {
-        printf("Error, png file must be on 4 Bytes per pixel\n");
+        printf("PNG file must have 3 channels not %d\n",png_raw->pixel_size);
         exit(0);
     }
     else
         printf("RGB Processing for Image of %d x %d pixels\n", png_raw->width, png_raw->height);
 
-    if (on_host)
-        process_on_host(png_raw);
-    else
-        process_on_device(png_raw);
+      process_on_device(png_raw,RGB);
 
     write_png(argv[2], png_raw);
 
-    printf("Processing finished \n");
+    printf("Processing finished \nColor used: %s",test);
 }
