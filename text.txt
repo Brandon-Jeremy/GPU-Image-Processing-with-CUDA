@@ -1,0 +1,13 @@
+hawk.png Blur hawk_blur.png
+hawk.png Brightness hawk_bright.png
+hawk.png EdgeDetection hawk_edge.png
+hawk.png Grayscale hawk_grey.png
+hawk.png RGBChannel hawk_RGB.png
+hawk.png Sharpen hawk_sharp.png
+us.png Blur us_blur.png
+us.png Brightness us_bright.png
+us.png EdgeDetection us_edge.png
+us.png Grayscale us_grey.png
+us.png RGBChannel us_RGB.png
+us.png Sharpen us_sharp.png
+us.png Sharpen us_sharp.png
